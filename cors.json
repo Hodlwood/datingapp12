@@ -1,0 +1,8 @@
+[
+  {
+    "origin": ["http://localhost:3000", "https://loveentrepreneurs-7c8a9.web.app"],
+    "method": ["GET", "POST", "PUT", "DELETE", "HEAD", "OPTIONS"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": ["Content-Type", "Access-Control-Allow-Origin"]
+  }
+] 
