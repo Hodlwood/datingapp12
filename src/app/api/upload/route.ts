@@ -5,27 +5,14 @@ export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
 
-async function getFirebaseAccessToken() {
-  const response = await fetch(
-    `https://www.googleapis.com/oauth2/v4/token`,
-    {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-        assertion: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
-      }),
-    }
-  );
-
-  const data = await response.json();
-  return data.access_token;
-}
-
 export async function POST(request: Request) {
   try {
+    // Check for required environment variables
+    if (!process.env.FIREBASE_STORAGE_BUCKET) {
+      console.error('FIREBASE_STORAGE_BUCKET is not set');
+      throw new Error('FIREBASE_STORAGE_BUCKET is not set');
+    }
+
     const formData = await request.formData();
     const file = formData.get('file') as File;
     
@@ -39,10 +26,9 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer();
     const timestamp = Date.now();
     const fileName = `photos/${timestamp}-${file.name}`;
-    const bucket = process.env.FIREBASE_STORAGE_BUCKET || 'loveentrepreneurs-7c8a9.firebasestorage.app';
+    const bucket = process.env.FIREBASE_STORAGE_BUCKET;
     
-    // Get Firebase access token
-    const accessToken = await getFirebaseAccessToken();
+    console.log('Uploading to bucket:', bucket);
     
     // Upload to Firebase Storage using REST API
     const uploadResponse = await fetch(
@@ -50,7 +36,6 @@ export async function POST(request: Request) {
       {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${accessToken}`,
           'Content-Type': file.type,
         },
         body: buffer,
@@ -58,11 +43,14 @@ export async function POST(request: Request) {
     );
 
     if (!uploadResponse.ok) {
-      throw new Error('Failed to upload to Firebase Storage');
+      const error = await uploadResponse.json();
+      console.error('Error uploading to Firebase Storage:', error);
+      throw new Error(`Failed to upload to Firebase Storage: ${error.error?.message || uploadResponse.statusText}`);
     }
 
     // Get the public URL
     const publicUrl = `https://storage.googleapis.com/${bucket}/${fileName}`;
+    console.log('Upload successful, public URL:', publicUrl);
 
     return NextResponse.json({ url: publicUrl });
   } catch (error: any) {

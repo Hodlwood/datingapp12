@@ -266,66 +266,53 @@ export default function ProfilePage() {
   };
 
   const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file || !user) return;
-
+    if (!e.target.files || !e.target.files[0] || !user) return;
+    
+    const file = e.target.files[0];
+    
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      setError('Please upload an image file');
+      return;
+    }
+    
+    // Validate file size (5MB limit)
+    if (file.size > 5 * 1024 * 1024) {
+      setError('File size must be less than 5MB');
+      return;
+    }
+    
     try {
       setUploading(true);
       setError('');
-
-      // Validate file type
-      if (!file.type.startsWith('image/')) {
-        throw new Error('Please select an image file');
-      }
-
-      // Validate file size (5MB limit)
-      const maxSize = 5 * 1024 * 1024; // 5MB in bytes
-      if (file.size > maxSize) {
-        throw new Error('File size must be less than 5MB');
-      }
-
-      // Create FormData
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('userId', user.uid);
-
-      // Upload using the API route
-      const response = await fetch('/api/upload', {
-        method: 'POST',
-        body: formData,
+      
+      // Create a reference to the file location in Firebase Storage
+      const storageRef = ref(storage, `photos/${Date.now()}-${file.name}`);
+      
+      // Upload the file
+      const snapshot = await uploadBytes(storageRef, file);
+      
+      // Get the download URL
+      const downloadURL = await getDownloadURL(snapshot.ref);
+      
+      // Update Firestore with the new photo URL
+      await updateDoc(doc(db, 'users', user.uid), {
+        photos: arrayUnion(downloadURL)
       });
-
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to upload photo');
-      }
-
-      const { url: downloadURL } = await response.json();
-
-      // Update Firestore document
-      const userRef = doc(db, 'users', user.uid);
-      await updateDoc(userRef, {
-        photoURL: downloadURL,
-        photos: arrayUnion(downloadURL),
-        updatedAt: serverTimestamp(),
-      });
-
+      
       // Update local state
       setProfileData(prev => {
         if (!prev) return null;
         return {
           ...prev,
-          photos: [...(prev.photos || []), downloadURL],
-          photoURL: downloadURL
+          photos: [...prev.photos, downloadURL]
         };
       });
-
-      // Show success message
-      setError('');
-    } catch (err: any) {
-      console.error('Upload error:', err);
-      setError(err.message || 'Failed to upload photo');
-    } finally {
+      
+      setUploading(false);
+    } catch (error) {
+      console.error('Upload error:', error);
+      setError('Failed to upload photo. Please try again.');
       setUploading(false);
     }
   };

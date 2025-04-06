@@ -19,7 +19,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-white shadow-sm">
+    <nav className="bg-white shadow-sm border-b border-gray-200">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex justify-between h-16">
           <div className="flex">
@@ -75,12 +75,14 @@ export default function Navbar() {
                     <Link href="/login" className="text-gray-700 hover:text-blue-600">
                       Log In
                     </Link>
+                    {/* Sign Up button temporarily removed
                     <Link 
                       href="/signup" 
                       className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
                     >
                       Sign Up
                     </Link>
+                    */}
                   </div>
                 )}
               </>
