@@ -1,9 +1,15 @@
 import { NextResponse } from 'next/server';
-import { v4 as uuidv4 } from 'uuid';
 
 export const runtime = 'edge';
 export const dynamic = 'force-dynamic';
 export const maxDuration = 300;
+
+// Function to generate a unique ID compatible with Edge Runtime
+function generateUniqueId() {
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 15);
+  return `${timestamp}-${randomStr}`;
+}
 
 async function getFirebaseAccessToken() {
   const response = await fetch(
@@ -37,7 +43,7 @@ export async function POST(request: Request) {
     }
 
     const buffer = await file.arrayBuffer();
-    const fileName = `${uuidv4()}-${file.name}`;
+    const fileName = `${generateUniqueId()}-${file.name}`;
     const bucket = process.env.FIREBASE_STORAGE_BUCKET || `${process.env.FIREBASE_PROJECT_ID}.appspot.com`;
     
     // Get Firebase access token
