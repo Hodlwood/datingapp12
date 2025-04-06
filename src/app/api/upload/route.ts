@@ -1,30 +1,28 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { initializeApp, getApps, cert } from 'firebase-admin/app';
-import { getStorage } from 'firebase-admin/storage';
+import { NextResponse } from 'next/server';
+import { v4 as uuidv4 } from 'uuid';
 
-// Initialize Firebase Admin if it hasn't been initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
+export const runtime = 'edge';
+export const dynamic = 'force-dynamic';
+export const maxDuration = 300;
+
+async function getFirebaseAccessToken() {
+  const response = await fetch(
+    `https://www.googleapis.com/oauth2/v4/token`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'),
       }),
-    });
-    console.log('Firebase Admin initialized successfully');
-  } catch (error) {
-    console.error('Error initializing Firebase Admin:', error);
-    throw error;
-  }
+    }
+  );
+
+  const data = await response.json();
+  return data.access_token;
 }
-
-// Get the storage instance
-const storageAdmin = getStorage();
-const bucketName = 'loveentrepreneurs-7c8a9.firebasestorage.app';
-console.log('Attempting to access bucket:', bucketName);
-
-const bucket = storageAdmin.bucket(bucketName);
 
 export async function POST(request: Request) {
   try {
@@ -38,29 +36,35 @@ export async function POST(request: Request) {
       );
     }
 
-    // Convert File to Buffer
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    
-    // Create a unique filename
+    const buffer = await file.arrayBuffer();
     const timestamp = Date.now();
-    const filename = `${timestamp}-${file.name}`;
+    const fileName = `photos/${timestamp}-${file.name}`;
+    const bucket = process.env.FIREBASE_STORAGE_BUCKET || 'loveentrepreneurs-7c8a9.firebasestorage.app';
     
-    // Upload to Firebase Storage
-    const fileRef = bucket.file(`photos/${filename}`);
-    await fileRef.save(buffer, {
-      metadata: {
-        contentType: file.type,
-      },
-    });
+    // Get Firebase access token
+    const accessToken = await getFirebaseAccessToken();
     
-    // Get the download URL
-    const [url] = await fileRef.getSignedUrl({
-      action: 'read',
-      expires: Date.now() + 7 * 24 * 60 * 60 * 1000, // 7 days
-    });
-    
-    return NextResponse.json({ url });
+    // Upload to Firebase Storage using REST API
+    const uploadResponse = await fetch(
+      `https://storage.googleapis.com/upload/storage/v1/b/${bucket}/o?name=${fileName}&uploadType=media`,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': file.type,
+        },
+        body: buffer,
+      }
+    );
+
+    if (!uploadResponse.ok) {
+      throw new Error('Failed to upload to Firebase Storage');
+    }
+
+    // Get the public URL
+    const publicUrl = `https://storage.googleapis.com/${bucket}/${fileName}`;
+
+    return NextResponse.json({ url: publicUrl });
   } catch (error: any) {
     console.error('Upload error details:', {
       message: error?.message || 'Unknown error',
