@@ -19,12 +19,21 @@ const nextConfig = {
         hostname: 'firebasestorage.googleapis.com',
         pathname: '/**',
       },
-    ],
-    domains: [
-      'lh3.googleusercontent.com',  // Google Auth profile images
-      'firebasestorage.googleapis.com',  // Firebase Storage images
-      'storage.googleapis.com',
-      'loveentrepreneurs-7c8a9.firebasestorage.app'
+      {
+        protocol: 'https',
+        hostname: 'lh3.googleusercontent.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'storage.googleapis.com',
+        pathname: '/**',
+      },
+      {
+        protocol: 'https',
+        hostname: 'loveentrepreneurs-7c8a9.firebasestorage.app',
+        pathname: '/**',
+      }
     ],
   },
   webpack: (config, { isServer }) => {
