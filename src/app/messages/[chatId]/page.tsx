@@ -149,6 +149,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   ← Back to Messages
                 </Link>
                 <div className="flex items-center">
+                  {/* Using optional chaining for safe access to user photos */}
                   {otherUser?.photoURL || otherUser?.photo || (otherUser?.photos && otherUser.photos[0]) ? (
                     <Image
                       src={otherUser?.photoURL || otherUser?.photo || (otherUser?.photos?.[0] || '')}
