@@ -152,7 +152,7 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                   {/* Using optional chaining for safe access to user photos */}
                   {otherUser?.photoURL || otherUser?.photo || otherUser?.photos?.[0] ? (
                     <Image
-                      src={otherUser?.photoURL || otherUser?.photo || otherUser?.photos?.[0] || ''}
+                      src={otherUser?.photoURL || otherUser?.photo || (otherUser?.photos?.[0] ?? '')}
                       alt={otherUser?.name || 'User'}
                       width={40}
                       height={40}
