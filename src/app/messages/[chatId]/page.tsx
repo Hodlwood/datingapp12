@@ -151,8 +151,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
                 <div className="flex items-center">
                   {otherUser?.photoURL || otherUser?.photo || (otherUser?.photos && otherUser.photos[0]) ? (
                     <Image
-                      src={otherUser.photoURL || otherUser.photo || otherUser.photos[0]}
-                      alt={otherUser.name}
+                      src={otherUser?.photoURL || otherUser?.photo || (otherUser?.photos?.[0] || '')}
+                      alt={otherUser?.name || 'User'}
                       width={40}
                       height={40}
                       className="rounded-full"
