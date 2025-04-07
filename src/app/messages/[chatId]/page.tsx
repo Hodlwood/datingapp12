@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, limit, Timestamp } from 'firebase/firestore';
+import { collection, query, where, getDocs, addDoc, onSnapshot, orderBy, limit, Timestamp, getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase/firebase';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -36,41 +36,43 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
   useEffect(() => {
     if (!user) return;
 
+    const [userId1, userId2] = params.chatId.split('_');
+    const otherUserId = userId1 === user.uid ? userId2 : userId1;
+
     const fetchOtherUser = async () => {
       try {
-        const [userId1, userId2] = params.chatId.split('_');
-        const otherUserId = userId1 === user.uid ? userId2 : userId1;
-
-        const userDoc = await getDocs(query(collection(db, 'users'), where('id', '==', otherUserId)));
-        const userData = userDoc.docs[0].data() as User;
-        setOtherUser(userData);
+        const otherUserDoc = await getDoc(doc(db, 'users', otherUserId));
+        if (otherUserDoc.exists()) {
+          setOtherUser(otherUserDoc.data() as User);
+        }
       } catch (err) {
-        setError('Failed to fetch user information.');
+        console.error('Error fetching other user:', err);
+        setError('Failed to load user profile.');
       }
     };
 
     fetchOtherUser();
 
-    // Set up real-time listener for messages
-    const messagesRef = collection(db, 'messages');
-    const q = query(
-      messagesRef,
-      where('fromUserId', 'in', [user.uid, params.chatId.split('_')[1]]),
-      where('toUserId', 'in', [user.uid, params.chatId.split('_')[1]]),
-      orderBy('createdAt', 'desc'),
-      limit(50)
+    // Query messages where both users are participants
+    const messagesQuery = query(
+      collection(db, 'messages'),
+      where('participants', 'array-contains', user.uid),
+      orderBy('createdAt', 'desc')
     );
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const messageList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Message));
-      setMessages(messageList);
-      setLoading(false);
-    }, (err) => {
-      console.error('Error fetching messages:', err);
-      setError('Failed to load messages.');
+    const unsubscribe = onSnapshot(messagesQuery, (snapshot) => {
+      const chatMessages = snapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Message))
+        .filter(msg => 
+          (msg.fromUserId === user.uid && msg.toUserId === otherUserId) ||
+          (msg.fromUserId === otherUserId && msg.toUserId === user.uid)
+        )
+        .sort((a, b) => a.createdAt.toDate().getTime() - b.createdAt.toDate().getTime());
+
+      setMessages(chatMessages);
       setLoading(false);
     });
 
@@ -90,7 +92,8 @@ export default function ChatPage({ params }: { params: { chatId: string } }) {
         toUserId: otherUserId,
         content: newMessage.trim(),
         createdAt: Timestamp.now(),
-        read: false
+        read: false,
+        participants: [user.uid, otherUserId] // Add both users to participants array
       };
 
       await addDoc(collection(db, 'messages'), messageData);

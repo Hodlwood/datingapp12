@@ -463,23 +463,42 @@ export default function DiscoveryPage() {
   };
 
   const handleSendMessage = async () => {
-    if (!user || !selectedProfile) return;
+    if (!user || !selectedProfile || !messageContent.trim()) return;
 
     try {
       setSendingMessage(true);
+      
+      console.log('Sending message with data:', {
+        fromUserId: user.uid,
+        toUserId: selectedProfile.id,
+        content: messageContent.trim(),
+        participants: [user.uid, selectedProfile.id]
+      });
       
       // Create the message document with a simpler structure
       const messageData = {
         fromUserId: user.uid,
         toUserId: selectedProfile.id,
-        content: "hi",
+        content: messageContent.trim(),
         createdAt: serverTimestamp(),
-        read: false
+        read: false,
+        participants: [user.uid, selectedProfile.id] // Add both users to participants array
       };
+
+      console.log('Message data to be sent:', messageData);
 
       // Create the message in the messages collection
       const messagesRef = collection(db, 'messages');
-      await addDoc(messagesRef, messageData);
+      const docRef = await addDoc(messagesRef, messageData);
+      console.log('Message sent successfully with ID:', docRef.id);
+
+      // Verify the message was created by fetching it
+      const messageDoc = await getDoc(doc(db, 'messages', docRef.id));
+      if (messageDoc.exists()) {
+        console.log('Message verified in database:', messageDoc.data());
+      } else {
+        console.error('Message not found in database after creation');
+      }
 
       // Show green checkmark overlay and swipe right
       setOverlayType('like');
@@ -491,6 +510,7 @@ export default function DiscoveryPage() {
         setShowOverlay(false);
         setShowMessagePopup(false);
         setSelectedProfile(null);
+        setMessageContent('');
         setCurrentIndex((prev) => prev + 1);
       }, 500);
     } catch (err) {

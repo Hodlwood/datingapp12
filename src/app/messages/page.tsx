@@ -53,46 +53,134 @@ export default function MessagesPage() {
 
     console.log('Setting up message listeners for user:', user.uid);
     
-    // Only query for received messages
-    const receivedMessagesQuery = query(
+    // Query for messages where the user is a participant
+    const messagesQuery = query(
       collection(db, 'messages'),
-      where('toUserId', '==', user.uid),
-      orderBy('createdAt', 'desc')
+      where('participants', 'array-contains', user.uid)
     );
 
-    // Set up listener for received messages only
-    const unsubscribeReceived = onSnapshot(
-      receivedMessagesQuery,
+    console.log('Messages query:', messagesQuery);
+
+    // Set up listener for all messages
+    const unsubscribeMessages = onSnapshot(
+      messagesQuery,
       async (snapshot) => {
-        console.log('Received messages snapshot received:', snapshot.size, 'messages');
-        const receivedMessages: Message[] = snapshot.docs.map(doc => {
+        console.log('Messages snapshot received:', snapshot.size, 'messages');
+        const allMessages: Message[] = snapshot.docs.map(doc => {
           const data = doc.data();
+          console.log('Message data:', { id: doc.id, ...data });
           return {
             id: doc.id,
             ...data,
-            isSent: false
+            isSent: data.fromUserId === user.uid
           } as Message;
         });
         
-        // Update messages state with received messages only
-        setMessages(receivedMessages);
+        // Sort messages by createdAt timestamp after fetching
+        allMessages.sort((a, b) => {
+          const timestampA = a.createdAt?.toDate?.() || new Date(0);
+          const timestampB = b.createdAt?.toDate?.() || new Date(0);
+          return timestampB.getTime() - timestampA.getTime(); // Sort in descending order
+        });
+        
+        console.log('Processed and sorted messages:', allMessages);
+        
+        // Update messages state with all messages
+        setMessages(allMessages);
 
-        // Fetch sender profiles
-        const uniqueSenderIds = Array.from(new Set(receivedMessages.map(msg => msg.fromUserId)));
-        await fetchUserProfiles(uniqueSenderIds);
+        // Fetch user profiles for both senders and receivers
+        const uniqueUserIds = Array.from(new Set(allMessages.flatMap(msg => [msg.fromUserId, msg.toUserId])));
+        console.log('Fetching profiles for users:', uniqueUserIds);
+        await fetchUserProfiles(uniqueUserIds);
         setReceivedMessagesLoaded(true);
       },
       (error) => {
-        console.error('Error in received messages listener:', error);
+        console.error('Error in messages listener:', error);
         setReceivedMessagesLoaded(true);
       }
     );
 
+    // Also try a direct query to see if there are any messages
+    const directQuery = async () => {
+      try {
+        const directMessagesQuery = query(
+          collection(db, 'messages'),
+          where('participants', 'array-contains', user.uid)
+        );
+        const directSnapshot = await getDocs(directMessagesQuery);
+        console.log('Direct query returned:', directSnapshot.size, 'messages');
+        
+        // Sort messages by createdAt timestamp
+        const sortedMessages = directSnapshot.docs
+          .map(doc => ({ id: doc.id, ...doc.data() } as Message))
+          .sort((a, b) => {
+            const timestampA = a.createdAt?.toDate?.() || new Date(0);
+            const timestampB = b.createdAt?.toDate?.() || new Date(0);
+            return timestampB.getTime() - timestampA.getTime(); // Sort in descending order
+          });
+        
+        console.log('Sorted direct query messages:', sortedMessages);
+        
+        directSnapshot.docs.forEach(doc => {
+          console.log('Direct query message:', { id: doc.id, ...doc.data() });
+        });
+      } catch (err) {
+        console.error('Error in direct query:', err);
+      }
+    };
+    
+    directQuery();
+
     return () => {
       console.log('Cleaning up messages listeners');
-      unsubscribeReceived();
+      unsubscribeMessages();
     };
   }, [user]);
+
+  useEffect(() => {
+    if (!messages.length) return;
+
+    const groupedMessages: { [key: string]: Message[] } = {};
+    messages.forEach(message => {
+      const otherUserId = message.fromUserId === user?.uid ? message.toUserId : message.fromUserId;
+      if (!groupedMessages[otherUserId]) {
+        groupedMessages[otherUserId] = [];
+      }
+      groupedMessages[otherUserId].push(message);
+    });
+
+    const conversationList: Conversation[] = Object.entries(groupedMessages).map(([otherUserId, messages]) => {
+      const sortedMessages = messages.sort((a, b) => 
+        getMessageTimestamp(b).getTime() - getMessageTimestamp(a).getTime()
+      );
+      // Count unread messages for received messages only
+      const unreadCount = messages.filter(m => !m.read && m.toUserId === user?.uid).length;
+      
+      return {
+        id: otherUserId,
+        otherUserId,
+        otherUserProfile: userProfiles[otherUserId] || { name: 'Unknown User' },
+        messages: sortedMessages,
+        lastMessage: sortedMessages[0],
+        unreadCount
+      };
+    });
+
+    // Sort conversations by last message time
+    conversationList.sort((a, b) => 
+      getMessageTimestamp(b.lastMessage).getTime() - getMessageTimestamp(a.lastMessage).getTime()
+    );
+
+    setConversations(conversationList);
+
+    // Update selected conversation if it exists
+    if (selectedConversation) {
+      const updatedConversation = conversationList.find(c => c.id === selectedConversation.id);
+      if (updatedConversation) {
+        setSelectedConversation(updatedConversation);
+      }
+    }
+  }, [messages, userProfiles, user?.uid, selectedConversation?.id]);
 
   useEffect(() => {
     // Only set loading to false when the query has completed
@@ -135,51 +223,6 @@ export default function MessagesPage() {
     }
   };
 
-  useEffect(() => {
-    if (!messages.length) return;
-
-    const groupedMessages: { [key: string]: Message[] } = {};
-    messages.forEach(message => {
-      const otherUserId = message.fromUserId === user?.uid ? message.toUserId : message.fromUserId;
-      if (!groupedMessages[otherUserId]) {
-        groupedMessages[otherUserId] = [];
-      }
-      groupedMessages[otherUserId].push(message);
-    });
-
-    const conversationList: Conversation[] = Object.entries(groupedMessages).map(([otherUserId, messages]) => {
-      const sortedMessages = messages.sort((a, b) => 
-        getMessageTimestamp(b).getTime() - getMessageTimestamp(a).getTime()
-      );
-      // Only count unread messages for received messages
-      const unreadCount = messages.filter(m => !m.read && m.toUserId === user?.uid).length;
-      
-      return {
-        id: otherUserId,
-        otherUserId,
-        otherUserProfile: userProfiles[otherUserId] || { name: 'Unknown User' },
-        messages: sortedMessages,
-        lastMessage: sortedMessages[0],
-        unreadCount
-      };
-    });
-
-    // Sort conversations by last message time
-    conversationList.sort((a, b) => 
-      getMessageTimestamp(b.lastMessage).getTime() - getMessageTimestamp(a.lastMessage).getTime()
-    );
-
-    setConversations(conversationList);
-
-    // Update selected conversation if it exists
-    if (selectedConversation) {
-      const updatedConversation = conversationList.find(c => c.id === selectedConversation.id);
-      if (updatedConversation) {
-        setSelectedConversation(updatedConversation);
-      }
-    }
-  }, [messages, userProfiles, user?.uid, selectedConversation?.id]);
-
   const handleSendMessage = async () => {
     if (!user || !selectedConversation || !newMessage.trim() || sendingMessage) return;
 
@@ -192,7 +235,8 @@ export default function MessagesPage() {
         toUserId: selectedConversation.otherUserId,
         content: newMessage.trim(),
         createdAt: serverTimestamp(),
-        read: false
+        read: false,
+        participants: [user.uid, selectedConversation.otherUserId]
       };
 
       // Add the message to Firestore
