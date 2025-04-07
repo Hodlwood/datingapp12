@@ -33,63 +33,21 @@ export default function ProfileMessages({ userId, currentUserId }: ProfileMessag
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [userProfiles, setUserProfiles] = useState<{ [key: string]: UserProfile }>({});
-  const [sentMessagesLoaded, setSentMessagesLoaded] = useState(false);
   const [receivedMessagesLoaded, setReceivedMessagesLoaded] = useState(false);
 
   useEffect(() => {
     console.log('ProfileMessages mounted with:', { userId, currentUserId });
     
-    // Query for both sent and received messages
-    const messagesQuery = query(
-      collection(db, 'messages'),
-      where('fromUserId', '==', userId),
-      orderBy('createdAt', 'desc')
-    );
-
+    // Only query for received messages
     const receivedMessagesQuery = query(
       collection(db, 'messages'),
       where('toUserId', '==', userId),
       orderBy('createdAt', 'desc')
     );
 
-    console.log('Setting up messages listeners for queries:', { messagesQuery, receivedMessagesQuery });
+    console.log('Setting up messages listener for query:', { receivedMessagesQuery });
 
-    // Set up listeners for both sent and received messages
-    const unsubscribeSent = onSnapshot(
-      messagesQuery,
-      async (snapshot) => {
-        console.log('Sent messages snapshot received:', snapshot.size, 'messages');
-        const sentMessages: Message[] = snapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data(),
-          isSent: true
-        } as Message));
-        
-        console.log('Processed sent messages:', sentMessages);
-        
-        // Update messages state with sent messages
-        setMessages(prev => {
-          const receivedMessages = prev.filter(msg => !msg.isSent);
-          const newMessages = [...sentMessages, ...receivedMessages].sort((a, b) => 
-            b.createdAt?.toDate().getTime() - a.createdAt?.toDate().getTime()
-          );
-          console.log('Updated messages state:', newMessages);
-          return newMessages;
-        });
-
-        // Fetch recipient profiles
-        const uniqueRecipientIds = Array.from(new Set(sentMessages.map(msg => msg.toUserId)));
-        console.log('Fetching recipient profiles for:', uniqueRecipientIds);
-        await fetchUserProfiles(uniqueRecipientIds);
-        setSentMessagesLoaded(true);
-      },
-      (error) => {
-        console.error('Error in sent messages listener:', error);
-        setError('Failed to load sent messages');
-        setSentMessagesLoaded(true);
-      }
-    );
-
+    // Set up listener for received messages only
     const unsubscribeReceived = onSnapshot(
       receivedMessagesQuery,
       async (snapshot) => {
@@ -102,15 +60,8 @@ export default function ProfileMessages({ userId, currentUserId }: ProfileMessag
         
         console.log('Processed received messages:', receivedMessages);
         
-        // Update messages state with received messages
-        setMessages(prev => {
-          const sentMessages = prev.filter(msg => msg.isSent);
-          const newMessages = [...sentMessages, ...receivedMessages].sort((a, b) => 
-            b.createdAt?.toDate().getTime() - a.createdAt?.toDate().getTime()
-          );
-          console.log('Updated messages state:', newMessages);
-          return newMessages;
-        });
+        // Update messages state with received messages only
+        setMessages(receivedMessages);
 
         // Fetch sender profiles
         const uniqueSenderIds = Array.from(new Set(receivedMessages.map(msg => msg.fromUserId)));
@@ -126,19 +77,18 @@ export default function ProfileMessages({ userId, currentUserId }: ProfileMessag
     );
 
     return () => {
-      console.log('Cleaning up messages listeners');
-      unsubscribeSent();
+      console.log('Cleaning up messages listener');
       unsubscribeReceived();
     };
   }, [userId, currentUserId]);
 
   useEffect(() => {
-    // Only set loading to false when both queries have completed
-    if (sentMessagesLoaded && receivedMessagesLoaded) {
-      console.log('Both queries completed, setting loading to false');
+    // Only set loading to false when the query has completed
+    if (receivedMessagesLoaded) {
+      console.log('Query completed, setting loading to false');
       setLoading(false);
     }
-  }, [sentMessagesLoaded, receivedMessagesLoaded]);
+  }, [receivedMessagesLoaded]);
 
   const fetchUserProfiles = async (userIds: string[]) => {
     const profiles: { [key: string]: UserProfile } = {};

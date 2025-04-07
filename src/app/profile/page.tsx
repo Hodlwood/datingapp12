@@ -654,7 +654,7 @@ export default function ProfilePage() {
                 <div className="flex flex-col items-end">
                   <h2 className="inline-block px-4 py-1 rounded-full text-xl font-semibold mb-4 bg-orange-100 text-gray-900">Looking For</h2>
                   <div className="mt-4 flex flex-wrap gap-2 justify-end">
-                    {profileData.lookingFor.map((item, index) => (
+                    {profileData.lookingFor?.map((item, index) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-orange-100 text-orange-800"
@@ -671,7 +671,7 @@ export default function ProfilePage() {
                 <div className="flex flex-col items-end">
                   <h2 className="inline-block px-4 py-1 rounded-full text-xl font-semibold mb-4 bg-teal-100 text-gray-900">Interests</h2>
                   <div className="mt-4 flex flex-wrap gap-2 justify-end">
-                    {profileData.interests.map((interest, index) => (
+                    {profileData.interests?.map((interest, index) => (
                       <span
                         key={index}
                         className="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-teal-100 text-teal-800"

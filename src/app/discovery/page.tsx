@@ -381,8 +381,20 @@ export default function DiscoveryPage() {
           }
         });
 
-        console.log('Loaded profiles after filtering:', loadedProfiles.length);
-        setProfiles(loadedProfiles);
+        // Calculate match scores and sort profiles
+        const profilesWithScores = loadedProfiles.map(profile => ({
+          profile,
+          score: calculateMatchScore(userProfile, profile)
+        }));
+
+        // Sort profiles by match score in descending order
+        profilesWithScores.sort((a, b) => b.score - a.score);
+
+        // Extract just the profiles in sorted order
+        const sortedProfiles = profilesWithScores.map(item => item.profile);
+
+        console.log('Loaded profiles after filtering and sorting:', sortedProfiles.length);
+        setProfiles(sortedProfiles);
         setCurrentIndex(0);
       } catch (error) {
         console.error('Error loading profiles:', error);

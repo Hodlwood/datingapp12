@@ -53,52 +53,14 @@ export default function MessagesPage() {
 
     console.log('Setting up message listeners for user:', user.uid);
     
-    // Query for all messages where user is either sender or receiver
-    const messagesQuery = query(
-      collection(db, 'messages'),
-      where('fromUserId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
-
+    // Only query for received messages
     const receivedMessagesQuery = query(
       collection(db, 'messages'),
       where('toUserId', '==', user.uid),
       orderBy('createdAt', 'desc')
     );
 
-    // Set up listeners for both sent and received messages
-    const unsubscribeSent = onSnapshot(
-      messagesQuery,
-      async (snapshot) => {
-        console.log('Sent messages snapshot received:', snapshot.size, 'messages');
-        const sentMessages: Message[] = snapshot.docs.map(doc => {
-          const data = doc.data();
-          return {
-            id: doc.id,
-            ...data,
-            isSent: true
-          } as Message;
-        });
-        
-        // Update messages state with sent messages
-        setMessages(prev => {
-          const receivedMessages = prev.filter(msg => !msg.isSent);
-          return [...sentMessages, ...receivedMessages].sort((a, b) => 
-            getMessageTimestamp(b).getTime() - getMessageTimestamp(a).getTime()
-          );
-        });
-
-        // Fetch recipient profiles
-        const uniqueRecipientIds = Array.from(new Set(sentMessages.map(msg => msg.toUserId)));
-        await fetchUserProfiles(uniqueRecipientIds);
-        setSentMessagesLoaded(true);
-      },
-      (error) => {
-        console.error('Error in sent messages listener:', error);
-        setSentMessagesLoaded(true);
-      }
-    );
-
+    // Set up listener for received messages only
     const unsubscribeReceived = onSnapshot(
       receivedMessagesQuery,
       async (snapshot) => {
@@ -112,13 +74,8 @@ export default function MessagesPage() {
           } as Message;
         });
         
-        // Update messages state with received messages
-        setMessages(prev => {
-          const sentMessages = prev.filter(msg => msg.isSent);
-          return [...sentMessages, ...receivedMessages].sort((a, b) => 
-            getMessageTimestamp(b).getTime() - getMessageTimestamp(a).getTime()
-          );
-        });
+        // Update messages state with received messages only
+        setMessages(receivedMessages);
 
         // Fetch sender profiles
         const uniqueSenderIds = Array.from(new Set(receivedMessages.map(msg => msg.fromUserId)));
@@ -133,18 +90,17 @@ export default function MessagesPage() {
 
     return () => {
       console.log('Cleaning up messages listeners');
-      unsubscribeSent();
       unsubscribeReceived();
     };
   }, [user]);
 
   useEffect(() => {
-    // Only set loading to false when both queries have completed
-    if (sentMessagesLoaded && receivedMessagesLoaded) {
-      console.log('Both queries completed, setting loading to false');
+    // Only set loading to false when the query has completed
+    if (receivedMessagesLoaded) {
+      console.log('Query completed, setting loading to false');
       setLoadingMessages(false);
     }
-  }, [sentMessagesLoaded, receivedMessagesLoaded]);
+  }, [receivedMessagesLoaded]);
 
   const fetchUserProfiles = async (userIds: string[]) => {
     const profiles: { [key: string]: UserProfile } = {};
