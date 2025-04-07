@@ -20,7 +20,7 @@ export default function ChatWidget() {
     if (isOpen && messages.length === 0) {
       setMessages([{
         role: 'assistant',
-        content: "Hi! I'm your AI dating assistant. I'm here to help you with:\n\n• Dating advice and tips\n• Profile optimization\n• Communication strategies\n• Understanding preferences\n• Work-life balance in dating\n\nHow can I assist you today?",
+        content: "Hi! I'm Rizzler 3000, your ultimate dating AI. I'm here to help you with:\n\n• Dating advice and tips\n• Profile optimization\n• Communication strategies\n• Understanding preferences\n• Work-life balance in dating\n\nHow can I assist you today?",
         timestamp: new Date()
       }]);
     }
@@ -101,7 +101,7 @@ export default function ChatWidget() {
           {/* Header */}
           <div className="flex items-center justify-between p-4 border-b">
             <div className="flex-1 text-center">
-              <h2 className="text-lg font-semibold text-blue-600">Dating Assistant</h2>
+              <h2 className="text-lg font-semibold text-blue-600">Rizzler 3000</h2>
             </div>
             <button
               onClick={() => setIsOpen(false)}

@@ -72,7 +72,10 @@ export default function Navbar() {
                   </div>
                 ) : (
                   <div className="flex items-center space-x-4">
-                    <Link href="/login" className="text-gray-700 hover:text-blue-600">
+                    <Link 
+                      href="/login" 
+                      className="bg-blue-500 text-white px-4 py-2 rounded-md hover:bg-blue-600 transition-colors"
+                    >
                       Log In
                     </Link>
                     {/* Sign Up button temporarily removed
