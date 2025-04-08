@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove, collection, query, where, orderBy, onSnapshot } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove, collection, query, where, orderBy, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL, uploadBytesResumable, deleteObject } from 'firebase/storage';
 import { db, storage } from '@/lib/firebase/firebase';
 import { uploadProfilePicture } from '@/lib/firebase/firebaseUtils';
 import Image from 'next/image';
@@ -78,6 +78,8 @@ export default function ProfilePage() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [isEditing, setIsEditing] = useState({ about: false });
   const [nameInput, setNameInput] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const router = useRouter();
   const { user, loading: authLoading, signOut } = useAuth();
 
@@ -392,6 +394,51 @@ export default function ProfilePage() {
     }
   };
 
+  const handleDeleteProfile = async () => {
+    if (!user) return;
+    
+    try {
+      setIsDeleting(true);
+      
+      // Delete user's photos from storage
+      if (profileData?.photos) {
+        for (const photoUrl of profileData.photos) {
+          try {
+            const photoRef = ref(storage, photoUrl);
+            await deleteObject(photoRef);
+          } catch (err) {
+            console.error('Error deleting photo:', err);
+          }
+        }
+      }
+
+      // Delete user's messages
+      const messagesQuery = query(
+        collection(db, 'messages'),
+        where('participants', 'array-contains', user.uid)
+      );
+      const messagesSnapshot = await getDocs(messagesQuery);
+      const messageDeletions = messagesSnapshot.docs.map(doc => deleteDoc(doc.ref));
+      await Promise.all(messageDeletions);
+
+      // Delete user's profile document
+      const userRef = doc(db, 'users', user.uid);
+      await deleteDoc(userRef);
+
+      // Sign out the user
+      await signOut();
+      
+      // Redirect to home page
+      router.push('/');
+    } catch (err) {
+      console.error('Error deleting profile:', err);
+      setError('Failed to delete profile');
+    } finally {
+      setIsDeleting(false);
+      setShowDeleteConfirm(false);
+    }
+  };
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -693,6 +740,43 @@ export default function ProfilePage() {
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+
+        {/* Delete Profile Section */}
+        <div className="mt-8 bg-white rounded-lg shadow p-6">
+          <div className="flex flex-col items-center space-y-4">
+            <h2 className="text-xl font-semibold text-gray-900">Delete Profile</h2>
+            <p className="text-gray-600 text-center max-w-md">
+              Once you delete your profile, all your data including photos, messages, and preferences will be permanently removed. This action cannot be undone.
+            </p>
+            {showDeleteConfirm ? (
+              <div className="flex flex-col items-center space-y-4">
+                <p className="text-red-600 font-medium">Are you sure you want to delete your profile?</p>
+                <div className="flex space-x-4">
+                  <button
+                    onClick={() => setShowDeleteConfirm(false)}
+                    className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-md hover:bg-gray-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDeleteProfile}
+                    disabled={isDeleting}
+                    className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {isDeleting ? 'Deleting...' : 'Yes, Delete Profile'}
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                onClick={() => setShowDeleteConfirm(true)}
+                className="px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
+              >
+                Delete Profile
+              </button>
+            )}
           </div>
         </div>
       </main>
